@@ -5233,6 +5233,19 @@ pkgqueue_contains() {
 	[ -d "deps/${pkg_dir_name}" ]
 }
 
+vpkgqueue_contains() {
+	[ "${PWD}" = "${MASTERMNT}/.p" ] || \
+	    err 1 "pkgqueue_contains requires PWD=${MASTERMNT}/.p"
+	[ $# -eq 1 ] || eargs pkgqueue_contains pkgname
+	local pkgname="$1"
+	local pkg_dir_name
+
+	pkgqueue_dir pkg_dir_name "${pkgname}"
+	pwd
+	echo "deps/${pkg_dir_name}"
+	[ -d "deps/${pkg_dir_name}" ]
+}
+
 pkgqueue_add() {
 	[ "${PWD}" = "${MASTERMNT}/.p" ] || \
 	    err 1 "pkgqueue_add requires PWD=${MASTERMNT}/.p"
@@ -7173,16 +7186,24 @@ prepare_ports() {
 			    nbq=$((${nbq} + 1))
 			bset stats_queued ${nbq##* }
 
+			local _originspec _pkgname _rdep tmp
+			while mapfile_read_loop "all_pkgs" \
+			    _pkguname _originspec _rdep; do
+				#[ "${_rdep}" = "listed" ] || \
+				        vpkgqueue_contains "${_pkgname}"
+					echo "ROS ${PACKAGES}"
+					#fetch "http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/${_pkguname}.txz" -o "${PACKAGES_ROOT}/.building/All" || true
+		    	done
 			# Generate ports.queued list after the queue was
 			# trimmed.
-			local _originspec _pkgname _rdep tmp
 			tmp=$(TMPDIR="${log}" mktemp -ut .queued)
 			while mapfile_read_loop "all_pkgs" \
 			    _pkgname _originspec _rdep; do
 				pkgqueue_contains "${_pkgname}" && \
 				    echo "${_originspec} ${_pkgname} ${_rdep}"
 			done | sort > "${tmp}"
-			mv -f "${tmp}" "${log}/.poudriere.ports.queued"
+			#mv -f "${tmp}" "${log}/.poudriere.ports.queued"
+			touch "${log}/.poudriere.ports.queued"
 		fi
 
 		pkgqueue_move_ready_to_pool
