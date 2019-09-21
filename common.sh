@@ -328,7 +328,7 @@ _my_path() {
 _my_name() {
 	setvar "$1" "${MASTERNAME}${MY_JOBID:+-job-${MY_JOBID}}"
 }
- 
+
 _log_path_top() {
 	setvar "$1" "${POUDRIERE_DATA}/logs/${POUDRIERE_BUILD_TYPE}"
 }
@@ -6945,6 +6945,34 @@ clean_build_queue() {
 	fi
 }
 
+populate_packages() {
+    local DEST_CPY META_CPY
+    #META_CPY="${PACKAGES_ROOT}/.latest/"
+    #DEST_CPY="${PACKAGES_ROOT}/.latest/All"
+    DEST_CPY="${PACKAGES_ROOT}/.building/All"
+    mkdir -p "${DEST_CPY}"
+    #fetch "http://pkg.freebsd.org/FreeBSD:12:amd64/latest/digests.txz" -o "${META_CPY}/"
+    #fetch "http://pkg.freebsd.org/FreeBSD:12:amd64/latest/meta.txz" -o "${META_CPY}/"
+    #fetch "http://pkg.freebsd.org/FreeBSD:12:amd64/latest/packagesite.txz" -o "${META_CPY}/"
+    while mapfile_read_loop "all_pkgs" \
+                _pkgname _originspec _rdep; do
+        [ "${_originspec}" = "ports-mgmt/pkg" ] && continue
+        if [ ! -f "${DEST_CPY}/${_pkgname}.txz" ]; then
+            echo "Downloading ${_pkgname}"
+            if  [ "${_rdep}" != "listed" ] && \
+                fetch "http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/${_pkgname}.txz" \
+                -o "${DEST_CPY}/${_pkgname}.txz" ; then
+                echo "Deleting ${_pkgname} from the queue"
+                echo "${_pkgname}" | pkgqueue_remove_many_pipe
+            fi
+       else
+            echo "Deleting ${_pkgname} from the queue"
+            echo "${_pkgname}" | pkgqueue_remove_many_pipe
+       fi
+    done
+    #commit_packages
+}
+
 # PWD will be MASTERMNT/.p after this
 prepare_ports() {
 	local pkg
@@ -7032,6 +7060,8 @@ prepare_ports() {
 	gather_port_vars
 
 	compute_deps
+
+    populate_packages
 
 	bset status "sanity:"
 
@@ -7152,6 +7182,7 @@ prepare_ports() {
 		msg "${sflag}Skipping incremental rebuild and repository sanity checks"
 	fi
 
+
 	if was_a_bulk_run; then
 		# Cleanup cached data that is no longer needed.
 		(
@@ -7176,6 +7207,8 @@ prepare_ports() {
 	msg "Sanity checking build queue"
 	bset status "pkgqueue_sanity_check:"
 	pkgqueue_sanity_check 0
+
+     # populate_packages
 
 	if was_a_bulk_run; then
 		if [ $resuming_build -eq 0 ]; then
